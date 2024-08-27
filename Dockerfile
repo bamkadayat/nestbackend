@@ -3,7 +3,7 @@ WORKDIR /app
 COPY . .
 RUN apk add git make g++ alpine-sdk python3 py3-pip unzip
 RUN yarn install
-RUN yarn prisma:generate
+RUN yarn migrate 
 RUN yarn build
 
 FROM node:20-alpine
