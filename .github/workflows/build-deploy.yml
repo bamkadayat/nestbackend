@@ -1,0 +1,61 @@
+name: Nestbackend Deploy to GCP
+
+on:
+  push:
+    branches: [production]
+    paths-ignore:
+      - '**.md'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    runs-on: ubuntu-latest
+    steps:
+      - name: Display environment variables
+        run: |
+          echo "PROJECT_ID=${{ vars.GCP_PROJECT_ID }}"
+          echo "REGION=${{ vars.GCP_REGION }}"
+          echo "CLOUD_RUN_SERVICE=${{ vars.CLOUD_RUN_SERVICE }}"
+          echo "GITHUB_REF=${{ github.ref }}"
+
+      - name: Checkout branch
+        uses: actions/checkout@v4
+
+      - name: Google Auth
+        id: auth
+        uses: 'google-github-actions/auth@v1'
+        with:
+          token_format: 'access_token'
+          workload_identity_provider: '${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}' # e.g. - projects/123456789/locations/global/workloadIdentityPools/my-pool/providers/my-provider
+          service_account: '${{ vars.GCP_SERVICE_ACCOUNT }}' # e.g. - my-service-account@my-project.iam.gserviceaccount.com
+
+      - name: Set up Cloud SDK
+        uses: 'google-github-actions/setup-gcloud@v1'
+        with:
+          project_id: '${{ env.PROJECT_ID }}'
+
+      # Configure the Docker credentials and authenticate to Google Artifact Registry
+      - name: Docker configuration
+        run: |-
+          echo ${{steps.auth.outputs.access_token}} | docker login -u oauth2accesstoken --password-stdin https://${{ vars.GCP_REGION }}-docker.pkg.dev
+
+      - name: Build and Push Container
+        run: |-
+          docker build -t "${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.CLOUD_RUN_SERVICE }}-images/${{ vars.CLOUD_RUN_SERVICE }}" ./
+          docker push "${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.CLOUD_RUN_SERVICE }}-images/${{ vars.CLOUD_RUN_SERVICE }}"
+
+      - name: Deploy to Cloud Run
+        id: deploy
+        uses: google-github-actions/deploy-cloudrun@v1
+        with:
+          service: '${{ vars.CLOUD_RUN_SERVICE }}'
+          region: '${{ vars.GCP_REGION }}'
+          image: '${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/${{ vars.CLOUD_RUN_SERVICE }}-images/${{ vars.CLOUD_RUN_SERVICE }}'
+
+      # If required, use the Cloud Run url output in later steps
+      - name: Show Output
+        run: echo ${{ steps.deploy.outputs.url }}

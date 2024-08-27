@@ -1,0 +1,39 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                  Int       @id @default(autoincrement())
+  email               String    @unique
+  fullname            String
+  password            String
+  pincode             String
+  isEmailVerified     Boolean   @default(false) // To track if the user's email is verified
+  isActive            Boolean   @default(true) // To track if the user account is active
+  createdAt           DateTime  @default(now()) // To track when the account was created
+  updatedAt           DateTime  @updatedAt // Automatically update the time when the user record is modified
+  lastLogin           DateTime? // To store the last login time of the user
+  failedLoginAttempts Int       @default(0) // To track failed login attempts for security purposes
+  lockoutEndTime      DateTime? // To implement account lockout after multiple failed attempts
+  posts               Post[]
+}
+
+model Post {
+  id        Int      @id @default(autoincrement())
+  title     String
+  content   String?
+  published Boolean? @default(false)
+  author    User?    @relation(fields: [authorId], references: [id])
+  authorId  Int?
+}
